@@ -4118,7 +4118,6 @@ var initRenderer = function(){
                 }
             }
         },
-
     });
 
     //
@@ -9508,6 +9507,11 @@ var executive = (function(){
 // current game state
 var state;
 
+// NEW VARIABLES
+var ghostsEaten;
+var eatenByGhost;
+var totalFrames = 0;
+
 // switches to another game state
 var switchState = function(nextState,fadeDuration, continueUpdate1, continueUpdate2) {
     state = (fadeDuration) ? fadeNextState(state,nextState,fadeDuration,continueUpdate1, continueUpdate2) : nextState;
@@ -10661,6 +10665,8 @@ var newGameState = (function() {
     var frames;
     var duration = 0;
     var startLevel = 1;
+	ghostsEaten = 0;
+	totalFrames = 0;
 
     return {
         init: function() {
@@ -10812,13 +10818,16 @@ var playState = {
             g = ghosts[i];
             if (g.tile.x == pacman.tile.x && g.tile.y == pacman.tile.y && g.mode == GHOST_OUTSIDE) {
                 if (g.scared) { // eat ghost
+					ghostsEaten++;
                     energizer.addPoints();
                     g.onEaten();
                 }
                 else if (pacman.invincible) // pass through ghost
                     continue;
-                else // killed by ghost
+                else {// killed by ghost
+					eatenByGhost = i;
                     switchState(deadState);
+				}
                 return true;
             }
         }
@@ -10859,6 +10868,8 @@ var playState = {
             }
             
             if (!skip) {
+
+				totalFrames++;
 
                 // update counters
                 ghostReleaser.update();
@@ -10987,12 +10998,89 @@ var seekableScriptState = newChildObject(scriptState, {
     },
 });
 
+function extractData(){
+	var data = "";
+	data += extractName();
+	data += extractScore();
+	data += extractQuadrant();
+	data += extractTimeElapsed();
+	data += extractGhostsEaten();
+	data += extractEatenByGhost();
+	//data += extractLevel();
+	//data += extractDotsRemaining();
+	//data += extractPositions();
+	//Saves the data as a CSV file and is downloaded onto the user's computer
+	var text = data,
+		blob = new Blob([text], { type: 'text/plain' }),
+		anchor = document.createElement('a');
+		anchor.download = "Data.csv";
+		anchor.href = (window.webkitURL || window.URL).createObjectURL(blob);
+		anchor.dataset.downloadurl = ['text/plain', anchor.download, anchor.href].join(':');
+		anchor.click();
+	
+}
+function extractName(){
+	return prompt("Enter your name") + ","; // The player enters their name when its game over
+}
+
+function extractLevel(){
+	return level + "," // records what level the player was on
+}
+
+function extractDotsRemaining(){
+	return map.dotsEaten + ",";
+}
+function extractQuadrant(){ // Gets which quadrant the user died on
+	var x = actors[4].tile.x, y = actors[4].tile.y, midX = (1 + 26) / 2, midY = (1 + 32) / 2;
+	if(x > midX)
+		if(y > midY)
+			return "Lower Right,"
+		else
+			return "Upper Right,"
+	else
+		if(y > midY)
+			return "Lower Left,"
+		else
+			return "Upper Left,"
+	
+	//return x + "," + y + ",";
+}
+function extractPositions(){
+	var j, positionData = "";
+	for (j=0; j<5; j++)
+		positionData += actors[j].tile.x + "," + actors[j].tile.y + "," // gets the position of each ghost when the player collides with one of them
+	return positionData;
+}
+function extractScore(){ // Gets the player's score 
+	return getScore() + ",";
+}
+function extractGhostsEaten(){ // Gets the total number of ghosts that were eaten by the player
+	return ghostsEaten + ",";
+}
+function extractEatenByGhost(){ // Gets which ghost killed the player
+	if(eatenByGhost == 0)
+		return "Blinky,";
+	else if(eatenByGhost == 1)
+		return "Pinky,";
+	else if(eatenByGhost == 2)
+		return "Inky,";
+	else
+		return "Clyde,";
+}
+
+function extractTimeElapsed(){
+	return (totalFrames / 60).toFixed(3) + ","; // Gets the time elapsed in the game, which is the total amount of frames shown divided by 60
+}
+
+ 
+
 ////////////////////////////////////////////////////
 // Dead state
 // (state when player has lost a life)
-
 var deadState = (function() {
-    
+	
+	
+	
     // this state will always have these drawn
     var commonDraw = function() {
         renderer.blitMap();
@@ -11000,11 +11088,14 @@ var deadState = (function() {
     };
 
     return newChildObject(seekableScriptState, {
+		
+		
 
         // script functions for each time
         triggers: {
             0: { // freeze
                 init: function() {
+					
                     audio.die.play();
                 },
                 update: function() {
@@ -11120,9 +11211,11 @@ var finishState = (function(){
 
 var overState = (function() {
     var frames;
+	
     return {
         init: function() {
             frames = 0;
+			
         },
         draw: function() {
             renderer.blitMap();
@@ -11130,7 +11223,10 @@ var overState = (function() {
             renderer.drawMessage("GAME  OVER", "#F00", 9, 20);
         },
         update: function() {
+			
             if (frames == 120) {
+				extractData(); //the extraction function is called here
+				totalFrames = 0;
                 switchState(homeState,60);
             }
             else
